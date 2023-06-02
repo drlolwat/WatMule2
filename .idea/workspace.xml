@@ -9,7 +9,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="032ce75f-c953-42e9-8179-5618a51c2bbb" name="Changes" comment="Paint update">
+    <list default="true" id="032ce75f-c953-42e9-8179-5618a51c2bbb" name="Changes" comment="Added queue check in case of multiple connections from the same slave&#10;Changed the queue to a HashMap and now storing the initial connection time&#10;Removing delinquent connections if they haven't traded us within 5 minutes&#10;If we have a target but for some reason they go away, we will clear them after 2 minutes so the other slaves don't spam us">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/org/lolwat/WatMule.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/org/lolwat/WatMule.java" afterDir="false" />
     </list>
@@ -80,13 +80,21 @@
       <option name="project" value="LOCAL" />
       <updated>1682669116779</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Added queue check in case of multiple connections from the same slave&#10;Changed the queue to a HashMap and now storing the initial connection time&#10;Removing delinquent connections if they haven't traded us within 5 minutes&#10;If we have a target but for some reason they go away, we will clear them after 2 minutes so the other slaves don't spam us">
+      <created>1685684762088</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1685684762088</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Initial" />
     <MESSAGE value="Any world support" />
     <MESSAGE value="Paint update" />
-    <option name="LAST_COMMIT_MESSAGE" value="Paint update" />
+    <MESSAGE value="Added queue check in case of multiple connections from the same slave&#10;Changed the queue to a HashMap and now storing the initial connection time&#10;Removing delinquent connections if they haven't traded us within 5 minutes&#10;If we have a target but for some reason they go away, we will clear them after 2 minutes so the other slaves don't spam us" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added queue check in case of multiple connections from the same slave&#10;Changed the queue to a HashMap and now storing the initial connection time&#10;Removing delinquent connections if they haven't traded us within 5 minutes&#10;If we have a target but for some reason they go away, we will clear them after 2 minutes so the other slaves don't spam us" />
   </component>
 </project>

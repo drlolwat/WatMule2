@@ -143,29 +143,22 @@ public class WatMule extends AbstractScript implements ChatListener {
     public int onLoop() {
         switch(currentState) {
             case WAITING: {
-                if(Client.isLoggedIn()) {
-                    if(!Tabs.isOpen(Tab.LOGOUT)) {
-                        Tabs.open(Tab.LOGOUT);
-                        Tabs.logout();
-                    }
-
-                    getRandomManager().disableSolver(RandomEvent.LOGIN);
-                    Logger.log("Disabled login solver");
-
-                } else {
-                    if(!queue.isEmpty()) {
-                        getRandomManager().enableSolver(RandomEvent.LOGIN);
-                        Logger.log("Enabled login solver");
-                        currentState = State.LOGGED_IN;
-                    }
+                if(queue.size() > 0) {
+                    getRandomManager().enableSolver(RandomEvent.LOGIN);
+                    currentState = State.LOGGED_IN;
+                    return 1;
                 }
 
-                return 5000;
+                return 500;
             }
 
             case LOGGED_IN: {
                 if(Client.isLoggedIn()) {
-                    if(!queue.isEmpty()) {
+                    if(!Tabs.isOpen(Tab.INVENTORY)) {
+                        Inventory.open();
+                    }
+
+                    if(queue.size() > 0) {
                         if(target.isEmpty()) {
                             // check for possible dead clients. slaves in queue who havent traded me for 5 minutes
                             List<String> toRemove = new ArrayList<>();
@@ -216,6 +209,14 @@ public class WatMule extends AbstractScript implements ChatListener {
                             }
                         }
                     } else {
+                        if(!Tabs.isOpen(Tab.LOGOUT)) {
+                            Tabs.open(Tab.LOGOUT);
+                            Sleep.sleep(300, 500);
+                            Tabs.logout();
+                        }
+
+                        getRandomManager().disableSolver(RandomEvent.LOGIN);
+                        Logger.log("Disabled login solver");
                         currentState = State.WAITING;
                     }
                 }
@@ -235,6 +236,14 @@ public class WatMule extends AbstractScript implements ChatListener {
                         Sleep.sleep(500, 750);
 
                         Bank.close();
+                        if(!Tabs.isOpen(Tab.LOGOUT)) {
+                            Tabs.open(Tab.LOGOUT);
+                            Sleep.sleep(300, 500);
+                            Tabs.logout();
+                        }
+
+                        getRandomManager().disableSolver(RandomEvent.LOGIN);
+                        Logger.log("Disabled login solver");
                         currentState = State.WAITING;
                     }
                 } else {
