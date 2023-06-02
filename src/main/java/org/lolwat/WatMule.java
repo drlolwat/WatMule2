@@ -33,10 +33,9 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.time.Instant;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,7 +50,7 @@ public class WatMule extends AbstractScript implements ChatListener {
     }
 
     private State currentState;
-    private static List<String> queue;
+    private static HashMap<String, Long> queue;
     private int goldCollected = 0;
     private String target = "";
     Timer timer;
@@ -66,7 +65,9 @@ public class WatMule extends AbstractScript implements ChatListener {
                 if(receivedMessage.startsWith("READY")) {
                     String[] sp = receivedMessage.split("\\|");
                     if(sp.length > 0) {
-                        queue.add(sp[1]);
+                        if(!queue.containsKey(sp[1])) {
+                            queue.put(sp[1], Instant.now().getEpochSecond());
+                        }
                         Logger.log("Added " + sp[1] + " to mule queue");
                         String response = "OK|" + Players.getLocal().getName() + "|" + Worlds.getCurrentWorld();
                         byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
@@ -93,7 +94,7 @@ public class WatMule extends AbstractScript implements ChatListener {
     public void onMessage(Message m) {
         if(target.isEmpty()) {
             if (m.getType().equals(MessageType.TRADE)) {
-                if (!queue.isEmpty() && queue.contains(m.getUsername())) {
+                if (!queue.isEmpty() && queue.containsKey(m.getUsername())) {
                     target = m.getUsername();
                 }
             }
@@ -134,7 +135,7 @@ public class WatMule extends AbstractScript implements ChatListener {
         });
 
         currentState = State.SETUP;
-        queue = new ArrayList<>();
+        queue = new HashMap<>();
         timer = new Timer();
     }
 
@@ -166,30 +167,51 @@ public class WatMule extends AbstractScript implements ChatListener {
                 if(Client.isLoggedIn()) {
                     if(!queue.isEmpty()) {
                         if(target.isEmpty()) {
+                            // check for possible dead clients. slaves in queue who havent traded me for 5 minutes
+                            List<String> toRemove = new ArrayList<>();
+                            for(Map.Entry<String, Long> kv : queue.entrySet()) {
+                                if((Instant.now().getEpochSecond() - kv.getValue()) >= 300) {
+                                    toRemove.add(kv.getKey());
+                                }
+                            }
+
+                            for(String n : toRemove) {
+                                queue.remove(n);
+                                Logger.log("removed " + n + " from queue due to delinquency");
+                            }
+
+                            toRemove.clear();
                             return 2000; // wait for target to trade me
                         }
-
-                        if (Players.closest(target) != null && Players.closest(target).distance() <= 2) {
-                            if (!Trade.isOpen()) {
-                                Trade.tradeWithPlayer(target);
-                                Sleep.sleepUntil(Trade::isOpen, 6000);
-                                return 1;
-                            } else {
-                                if (Trade.isOpen(1)) {
-                                    Trade.acceptTrade(1);
-                                    Sleep.sleepUntil(() -> Trade.isOpen(2), 2000);
-                                }
-
-                                if (Trade.isOpen(2)) {
-                                    Trade.acceptTrade(2);
-                                    if(Trade.getItem(false, "Coins") != null) {
-                                        goldCollected += Trade.getItem(false, "Coins").getAmount();
-                                    }
-                                    Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
-                                    queue.remove(target);
-                                    target = "";
-                                    tradeCount++; // Increment the trade count
+                        else {
+                            if (Players.closest(target) != null && Players.closest(target).distance() <= 2) {
+                                if (!Trade.isOpen()) {
+                                    Trade.tradeWithPlayer(target);
+                                    Sleep.sleepUntil(Trade::isOpen, 6000);
                                     return 1;
+                                } else {
+                                    if (Trade.isOpen(1)) {
+                                        Trade.acceptTrade(1);
+                                        Sleep.sleepUntil(() -> Trade.isOpen(2), 2000);
+                                    }
+
+                                    if (Trade.isOpen(2)) {
+                                        Trade.acceptTrade(2);
+                                        if (Trade.getItem(false, "Coins") != null) {
+                                            goldCollected += Trade.getItem(false, "Coins").getAmount();
+                                        }
+                                        Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
+                                        queue.remove(target);
+                                        target = "";
+                                        tradeCount++; // Increment the trade count
+                                        return 1;
+                                    }
+                                }
+                            } else {
+                                if(queue.containsKey(target) && (Instant.now().getEpochSecond() - queue.get(target)) >= 120) {
+                                    queue.remove(target);
+                                    Logger.log("removed " + target + " from queue due to delinquency");
+                                    target = "";
                                 }
                             }
                         }
