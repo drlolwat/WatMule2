@@ -239,7 +239,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         Sleep.sleep(15000);
 
                                         // Check if the other player has offered coins
-                                        if (!Trade.contains(false, "Coins")) {
+                                        if (!Trade.contains(false, "Coins")&&!Trade.contains(true, "Coins")) {
                                             Logger.log(target + " has not offered any coins. Cancelling trade.");
                                             Trade.declineTrade();
                                             target = "";
