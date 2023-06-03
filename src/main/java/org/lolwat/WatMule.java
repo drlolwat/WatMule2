@@ -224,8 +224,10 @@ public class WatMule extends AbstractScript implements ChatListener {
                                 } else {
                                     if (Trade.isOpen(1)) {
                                         if(coinsToReverse.containsKey(target) && !Trade.contains(true, "Coins")) {
-                                            Trade.addItem(Inventory.get("Coins"), coinsToReverse.get(target));
-                                            Sleep.sleep(500, 800);
+                                            if(Inventory.contains("Coins")) {
+                                                Trade.addItem(Inventory.get("Coins"), Inventory.get("Coins").getAmount() >= coinsToReverse.get(target) ? coinsToReverse.get(target) : Inventory.get("Coins").getAmount());
+                                                Sleep.sleep(500, 800);
+                                            }
                                         }
 
                                         Trade.acceptTrade(1);
