@@ -11,15 +11,11 @@ import org.dreambot.api.methods.tabs.Tabs;
 import org.dreambot.api.methods.trade.Trade;
 import org.dreambot.api.methods.walking.impl.Walking;
 import org.dreambot.api.methods.world.Worlds;
-import org.dreambot.api.randoms.LoginSolver;
 import org.dreambot.api.randoms.RandomEvent;
-import org.dreambot.api.randoms.RandomManager;
-import org.dreambot.api.randoms.RandomSolver;
 import org.dreambot.api.script.AbstractScript;
 import org.dreambot.api.script.Category;
 import org.dreambot.api.script.ScriptManifest;
 import org.dreambot.api.script.listener.ChatListener;
-import org.dreambot.api.script.listener.ExperienceListener;
 import org.dreambot.api.utilities.Logger;
 import org.dreambot.api.utilities.Sleep;
 import org.dreambot.api.utilities.Timer;
@@ -27,9 +23,7 @@ import org.dreambot.api.wrappers.widgets.message.Message;
 import org.dreambot.api.wrappers.widgets.message.MessageType;
 
 import java.awt.*;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -53,6 +47,7 @@ public class WatMule extends AbstractScript implements ChatListener {
     private static HashMap<String, Long> queue;
     private int goldCollected = 0;
     private String target = "";
+    private static HashMap<String, Integer> coinsToReverse = new HashMap<>();
     Timer timer;
 
     private static void handleClient(Socket clientSocket) {
@@ -63,15 +58,37 @@ public class WatMule extends AbstractScript implements ChatListener {
                 String receivedMessage = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
 
                 if(receivedMessage.startsWith("READY")) {
-                    String[] sp = receivedMessage.split("\\|");
-                    if(sp.length > 0) {
-                        if(!queue.containsKey(sp[1])) {
-                            queue.put(sp[1], Instant.now().getEpochSecond());
+                    Logger.log("REC: " + receivedMessage);
+                    //
+                    String[] messageContent = receivedMessage.split("\\|");
+                    if(receivedMessage.contains("READY-REVERSE")) {
+                        String[] reverseContent = receivedMessage.split(";");
+                        for(String item : reverseContent) {
+                            String[] itemContents = item.split(":");
+                            if(!itemContents[0].isEmpty() && !itemContents[1].isEmpty()) {
+                                coinsToReverse.put(messageContent[1], Integer.parseInt(itemContents[1]));
+                            }
                         }
-                        Logger.log("Added " + sp[1] + " to mule queue");
+
+                        if (!queue.containsKey(messageContent[1])) {
+                            queue.put(messageContent[1], Instant.now().getEpochSecond());
+                        }
+
+                        Logger.log("Added " + messageContent[1] + " to reverse mule queue, giving them " + coinsToReverse.get(messageContent[1]) + " coins");
                         String response = "OK|" + Players.getLocal().getName() + "|" + Worlds.getCurrentWorld();
                         byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
                         clientSocket.getOutputStream().write(responseBytes);
+                    }
+                    else {
+                        if (messageContent.length > 0) {
+                            if (!queue.containsKey(messageContent[1])) {
+                                queue.put(messageContent[1], Instant.now().getEpochSecond());
+                            }
+                            Logger.log("Added " + messageContent[1] + " to mule queue");
+                            String response = "OK|" + Players.getLocal().getName() + "|" + Worlds.getCurrentWorld();
+                            byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
+                            clientSocket.getOutputStream().write(responseBytes);
+                        }
                     }
                 }
             }
@@ -117,6 +134,7 @@ public class WatMule extends AbstractScript implements ChatListener {
 
     @Override
     public void onStart() {
+        Walking.setMinimapTargetSize(15);
         Client.getInstance().setMouseMovementAlgorithm(new BezierMouse());
         executorService = Executors.newFixedThreadPool(10);
 
@@ -158,6 +176,27 @@ public class WatMule extends AbstractScript implements ChatListener {
                         Inventory.open();
                     }
 
+                    int coinsRequired = 0;
+                    if(coinsToReverse.size() > 0) {
+                        for (Integer coins : coinsToReverse.values()) {
+                            coinsRequired += coins;
+                        }
+                    }
+
+                    if(coinsRequired > 0 && !Trade.isOpen()) {
+                        if(!Inventory.contains("Coins") || Inventory.get("Coins").getAmount() < coinsRequired) {
+                            if (!Bank.isOpen()) {
+                                if (Bank.open()) {
+                                    if (Bank.contains("Coins") && Bank.get("Coins").getAmount() >= coinsRequired) {
+                                        Bank.withdraw("Coins", coinsRequired);
+                                    }
+
+                                    Bank.close();
+                                }
+                            }
+                        }
+                    }
+
                     if(queue.size() > 0) {
                         if(target.isEmpty()) {
                             // check for possible dead clients. slaves in queue who havent traded me for 5 minutes
@@ -184,6 +223,11 @@ public class WatMule extends AbstractScript implements ChatListener {
                                     return 1;
                                 } else {
                                     if (Trade.isOpen(1)) {
+                                        if(coinsToReverse.containsKey(target) && !Trade.contains(true, "Coins")) {
+                                            Trade.addItem(Inventory.get("Coins"), coinsToReverse.get(target));
+                                            Sleep.sleep(500, 800);
+                                        }
+
                                         Trade.acceptTrade(1);
                                         Sleep.sleepUntil(() -> Trade.isOpen(2), 2000);
                                     }
@@ -193,7 +237,10 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         if (Trade.getItem(false, "Coins") != null) {
                                             goldCollected += Trade.getItem(false, "Coins").getAmount();
                                         }
+
                                         Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
+
+                                        coinsToReverse.remove(target);
                                         queue.remove(target);
                                         target = "";
                                         tradeCount++; // Increment the trade count
