@@ -235,11 +235,11 @@ public class WatMule extends AbstractScript implements ChatListener {
                                     }
 
                                     if (Trade.isOpen(2)) {
-                                        // Wait for 15 seconds
-                                        Sleep.sleep(15000);
+                                        // Wait for 15 seconds?? why? 2.5-3s should be sufficient
+                                        Sleep.sleep(2500, 3500);
 
                                         // Check if the other player has offered coins
-                                        if (!Trade.contains(false, "Coins")&&!Trade.contains(true, "Coins")) {
+                                        if (!Trade.contains(false, "Coins") && !Trade.contains(true, "Coins")) {
                                             Logger.log(target + " has not offered any coins. Cancelling trade.");
                                             Trade.declineTrade();
                                             target = "";
@@ -249,6 +249,10 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         Trade.acceptTrade(2);
                                         if (Trade.getItem(false, "Coins") != null) {
                                             goldCollected += Trade.getItem(false, "Coins").getAmount();
+                                        }
+
+                                        if(Trade.getItem(true, "Coins") != null) {
+                                            goldCollected -= Trade.getItem(true, "Coins").getAmount();
                                         }
 
                                         Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
