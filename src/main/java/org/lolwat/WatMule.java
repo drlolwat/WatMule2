@@ -231,7 +231,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         }
 
                                         Trade.acceptTrade(1);
-                                        Sleep.sleepUntil(() -> Trade.isOpen(2), 2000);
+                                        Sleep.sleepUntil(() -> Trade.isOpen(2), 3000);
                                     }
 
                                     if (Trade.isOpen(2)) {
@@ -247,6 +247,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         }
 
                                         Trade.acceptTrade(2);
+
                                         if (Trade.getItem(false, "Coins") != null) {
                                             goldCollected += Trade.getItem(false, "Coins").getAmount();
                                         }
