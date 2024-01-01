@@ -6,6 +6,8 @@ import org.dreambot.api.methods.container.impl.bank.Bank;
 import org.dreambot.api.methods.container.impl.bank.BankLocation;
 import org.dreambot.api.methods.interactive.NPCs;
 import org.dreambot.api.methods.interactive.Players;
+import org.dreambot.api.methods.map.Area;
+import org.dreambot.api.methods.map.Tile;
 import org.dreambot.api.methods.tabs.Tab;
 import org.dreambot.api.methods.tabs.Tabs;
 import org.dreambot.api.methods.trade.Trade;
@@ -48,8 +50,30 @@ public class WatMule extends AbstractScript implements ChatListener {
     private int goldCollected = 0;
     private String target = "";
     private static HashMap<String, Integer> coinsToReverse = new HashMap<>();
+    private static final Area MULE_AREA = new Area(3158, 3496, 3171, 3483);
+    private static final Area CUSTOM_AREA = new Area(
+            new Tile[] {
+                    new Tile(3161, 3499, 0),
+                    new Tile(3168, 3499, 0),
+                    new Tile(3174, 3494, 0),
+                    new Tile(3174, 3486, 0),
+                    new Tile(3169, 3481, 0),
+                    new Tile(3160, 3481, 0),
+                    new Tile(3155, 3486, 0),
+                    new Tile(3155, 3493, 0),
+                    new Tile(3163, 3492, 0),
+                    new Tile(3166, 3492, 0),
+                    new Tile(3167, 3491, 0),
+                    new Tile(3167, 3488, 0),
+                    new Tile(3163, 3488, 0),
+                    new Tile(3162, 3489, 0),
+                    new Tile(3162, 3492, 0),
+                    new Tile(3155, 3493, 0)
+            }
+    );
     Timer timer;
 
+    //TODO Add burnt food support
     private static void handleClient(Socket clientSocket) {
         try {
             byte[] buffer = new byte[1024];
@@ -172,6 +196,35 @@ public class WatMule extends AbstractScript implements ChatListener {
 
             case LOGGED_IN: {
                 if(Client.isLoggedIn()) {
+
+                    if (!CUSTOM_AREA.contains(Players.getLocal())) {
+                        Tile centerTile = CUSTOM_AREA.getRandomTile();
+                        Walking.walk(centerTile);
+                        Sleep.sleepUntil(() -> CUSTOM_AREA.contains(Players.getLocal()), 5000);
+                        return 1000;
+                    }
+
+                    if (Inventory.isFull()) {
+                        Logger.log("Inventory is full. Depositing items except for coins.");
+                        if (!Bank.open(BankLocation.GRAND_EXCHANGE)) {
+                            Logger.log("Unable to open bank at Grand Exchange.");
+                            return 1000;
+                        }
+
+                        Sleep.sleepUntil(Bank::isOpen, 5000);
+
+                        if (Bank.isOpen()) {
+                            // Deposit all items except coins
+                            Bank.depositAllExcept("Coins");
+                            Sleep.sleepUntil(() -> !Inventory.isFull(), 3000);
+                        } else {
+                            Logger.log("Failed to open bank.");
+                            return 1000;
+                        }
+
+                        Logger.log("Items deposited. Resuming muling task.");
+                    }
+
                     if(!Tabs.isOpen(Tab.INVENTORY)) {
                         Inventory.open();
                     }
