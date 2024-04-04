@@ -273,7 +273,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                 if (!Trade.isOpen()) {
                                     Trade.tradeWithPlayer(target);
                                     Sleep.sleepUntil(Trade::isOpen, 6000);
-                                    return 1;
+                                    return 1000;
                                 } else {
                                     if (Trade.isOpen(1)) {
                                         if(coinsToReverse.containsKey(target) && !Trade.contains(true, "Coins")) {
@@ -296,7 +296,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                             Logger.log(target + " has not offered any coins. Cancelling trade.");
                                             Trade.declineTrade();
                                             target = "";
-                                            return 1;
+                                            return 1000;
                                         }
 
                                         Trade.acceptTrade(2);
@@ -315,7 +315,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                                         queue.remove(target);
                                         target = "";
                                         tradeCount++; // Increment the trade count
-                                        return 1;
+                                        return 1000;
                                     }
                                 }
                             } else {
