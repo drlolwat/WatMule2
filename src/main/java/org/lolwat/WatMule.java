@@ -348,7 +348,12 @@ public class WatMule extends AbstractScript implements ChatListener {
                         Sleep.sleepUntil(Bank::isOpen, 5000);
 
                         if(!Inventory.isEmpty()) {
-                            Bank.depositAllItems();
+                            Bank.depositAllExcept("Coins");
+                            Sleep.sleep(500, 750);
+                        }
+
+                        if(Bank.contains("Coins")) {
+                            Bank.withdrawAll("Coins");
                         }
 
                         Sleep.sleep(500, 750);
