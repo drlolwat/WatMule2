@@ -1,5 +1,7 @@
 package org.lolwat;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.dreambot.api.Client;
 import org.dreambot.api.methods.container.impl.Inventory;
 import org.dreambot.api.methods.container.impl.bank.Bank;
@@ -21,13 +23,19 @@ import org.dreambot.api.script.listener.ChatListener;
 import org.dreambot.api.utilities.Logger;
 import org.dreambot.api.utilities.Sleep;
 import org.dreambot.api.utilities.Timer;
+import org.dreambot.api.wrappers.interactive.Player;
+import org.dreambot.api.wrappers.items.Item;
+import org.dreambot.api.wrappers.widgets.Menu;
 import org.dreambot.api.wrappers.widgets.message.Message;
 import org.dreambot.api.wrappers.widgets.message.MessageType;
 
 import java.awt.*;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
@@ -38,7 +46,6 @@ import java.util.concurrent.Executors;
 @ScriptManifest(name = "WatMule", description = "It is what it is", author = "lolwat",
         version = 1.0, category = Category.MISC, image = "")
 public class WatMule extends AbstractScript implements ChatListener {
-
     private enum State {
         WAITING,
         LOGGED_IN,
@@ -73,7 +80,6 @@ public class WatMule extends AbstractScript implements ChatListener {
     );
     Timer timer;
 
-    //TODO Add burnt food support
     private static void handleClient(Socket clientSocket) {
         try {
             byte[] buffer = new byte[1024];
@@ -159,7 +165,6 @@ public class WatMule extends AbstractScript implements ChatListener {
     @Override
     public void onStart() {
         Walking.setMinimapTargetSize(15);
-        Client.getInstance().setMouseMovementAlgorithm(new BezierMouse());
         executorService = Executors.newFixedThreadPool(10);
 
         executorService.submit(() -> {
@@ -179,13 +184,24 @@ public class WatMule extends AbstractScript implements ChatListener {
         currentState = State.SETUP;
         queue = new HashMap<>();
         timer = new Timer();
+
+        if (!org.dreambot.api.wrappers.widgets.Menu.isMenuManipulationActive()) {
+            Logger.log("Enabling menu manipulation");
+            Menu.toggleMenuManipulation(true);
+        }
     }
 
     @Override
     public int onLoop() {
+        if(queue.containsKey(target) && (Instant.now().getEpochSecond() - queue.get(target)) >= 120) {
+            queue.remove(target);
+            Logger.log("removed " + target + " from queue due to delinquency");
+            target = "";
+        }
+
         switch(currentState) {
             case WAITING: {
-                if(queue.size() > 0) {
+                if(!queue.isEmpty()) {
                     getRandomManager().enableSolver(RandomEvent.LOGIN);
                     currentState = State.LOGGED_IN;
                     return 1;
@@ -196,7 +212,6 @@ public class WatMule extends AbstractScript implements ChatListener {
 
             case LOGGED_IN: {
                 if(Client.isLoggedIn()) {
-
                     if (!CUSTOM_AREA.contains(Players.getLocal())) {
                         Tile centerTile = CUSTOM_AREA.getRandomTile();
                         Walking.walk(centerTile);
@@ -230,17 +245,17 @@ public class WatMule extends AbstractScript implements ChatListener {
                     }
 
                     int coinsRequired = 0;
-                    if(coinsToReverse.size() > 0) {
+                    if(!coinsToReverse.isEmpty()) {
                         for (Integer coins : coinsToReverse.values()) {
                             coinsRequired += coins;
                         }
                     }
 
                     if(coinsRequired > 0 && !Trade.isOpen()) {
-                        if(!Inventory.contains("Coins") || Inventory.get("Coins").getAmount() < coinsRequired) {
+                        if(!Inventory.contains("Coins") || Inventory.count("Coins") < coinsRequired) {
                             if (!Bank.isOpen()) {
                                 if (Bank.open()) {
-                                    if (Bank.contains("Coins") && Bank.get("Coins").getAmount() >= coinsRequired) {
+                                    if (Bank.contains("Coins") && Bank.count("Coins") >= coinsRequired) {
                                         Bank.withdraw("Coins", coinsRequired);
                                     }
 
@@ -250,12 +265,11 @@ public class WatMule extends AbstractScript implements ChatListener {
                         }
                     }
 
-                    if(queue.size() > 0) {
+                    if(!queue.isEmpty()) {
                         if(target.isEmpty()) {
-                            // check for possible dead clients. slaves in queue who havent traded me for 5 minutes
                             List<String> toRemove = new ArrayList<>();
                             for(Map.Entry<String, Long> kv : queue.entrySet()) {
-                                if((Instant.now().getEpochSecond() - kv.getValue()) >= 300) {
+                                if((Instant.now().getEpochSecond() - kv.getValue()) >= 180) {
                                     toRemove.add(kv.getKey());
                                 }
                             }
@@ -266,73 +280,77 @@ public class WatMule extends AbstractScript implements ChatListener {
                             }
 
                             toRemove.clear();
-                            return 2000; // wait for target to trade me
+                            return 2000;
                         }
                         else {
-                            if (Players.closest(target) != null && Players.closest(target).distance() <= 2) {
-                                if (!Trade.isOpen()) {
-                                    Trade.tradeWithPlayer(target);
-                                    Sleep.sleepUntil(Trade::isOpen, 6000);
-                                    return 1000;
-                                } else {
-                                    if (Trade.isOpen(1)) {
-                                        if(coinsToReverse.containsKey(target) && !Trade.contains(true, "Coins")) {
-                                            if(Inventory.contains("Coins")) {
-                                                Trade.addItem(Inventory.get("Coins"), Inventory.get("Coins").getAmount() >= coinsToReverse.get(target) ? coinsToReverse.get(target) : Inventory.get("Coins").getAmount());
-                                                Sleep.sleep(500, 800);
+                            int changeBy = 0;
+                            Player slave = Players.closest(target);
+                            if(slave != null && Players.getLocal().canReach(slave.getTile())) {
+                                if(Trade.isOpen()) {
+                                    if(Trade.isOpen(1)) {
+                                        if (coinsToReverse.containsKey(slave.getName())) {
+                                            if (!Trade.contains(true, "Coins") && Inventory.contains("Coins")) {
+                                                Item coins = Inventory.get("Coins");
+                                                if (coins != null) {
+                                                    Trade.addItem(coins, Inventory.count("Coins")
+                                                            >= coinsToReverse.get(slave.getName())
+                                                            ? coinsToReverse.get(slave.getName())
+                                                            : Inventory.count("Coins"));
+
+                                                    Sleep.sleepUntil(() -> Trade.contains(true, "Coins"), 2000);
+                                                }
                                             }
                                         }
 
-                                        Trade.acceptTrade(1);
-                                        Sleep.sleepUntil(() -> Trade.isOpen(2), 3000);
+                                        if (Trade.contains(true, "Coins")
+                                                || Trade.contains(false, "Coins")) {
+                                            Trade.acceptTrade(1);
+                                            Sleep.sleepUntil(() -> Trade.isOpen(2), 2000);
+                                        }
                                     }
+                                    else if(Trade.isOpen(2)) {
+                                        if(!Trade.contains(true, "Coins")
+                                                && !Trade.contains(false, "Coins")) {
 
-                                    if (Trade.isOpen(2)) {
-                                        // Wait for 15 seconds?? why? 2.5-3s should be sufficient
-                                        Sleep.sleep(2500, 3500);
-
-                                        // Check if the other player has offered coins
-                                        if (!Trade.contains(false, "Coins") && !Trade.contains(true, "Coins")) {
                                             Logger.log(target + " has not offered any coins. Cancelling trade.");
                                             Trade.declineTrade();
                                             target = "";
                                             return 1000;
                                         }
 
-                                        Trade.acceptTrade(2);
+                                        if(Trade.contains(true, "Coins")
+                                                || Trade.contains(false, "Coins")) {
 
-                                        if (Trade.getItem(false, "Coins") != null) {
-                                            goldCollected += Trade.getItem(false, "Coins").getAmount();
+                                            Item myCoins = Trade.getItem(true, "Coins");
+                                            if(myCoins != null) {
+                                                changeBy = -myCoins.getAmount();
+                                                goldCollected -= myCoins.getAmount();
+                                            }
+
+                                            Item theirCoins = Trade.getItem(false, "Coins");
+                                            if(theirCoins != null) {
+                                                changeBy = theirCoins.getAmount();
+                                                goldCollected += theirCoins.getAmount();
+                                            }
+
+                                            Trade.acceptTrade();
+                                            Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
+                                            sendWebhook("Trade completed with " + target + " for " + simplifyNumber(changeBy) + " coins", false);
+                                            coinsToReverse.remove(target);
+                                            queue.remove(target);
+                                            target = "";
+                                            tradeCount++;
                                         }
-
-                                        if(Trade.getItem(true, "Coins") != null) {
-                                            goldCollected -= Trade.getItem(true, "Coins").getAmount();
-                                        }
-
-                                        Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
-
-                                        coinsToReverse.remove(target);
-                                        queue.remove(target);
-                                        target = "";
-                                        tradeCount++; // Increment the trade count
-                                        return 1000;
                                     }
-                                }
-                            } else {
-                                if(queue.containsKey(target) && (Instant.now().getEpochSecond() - queue.get(target)) >= 120) {
-                                    queue.remove(target);
-                                    Logger.log("removed " + target + " from queue due to delinquency");
-                                    target = "";
+                                } else {
+                                    Trade.tradeWithPlayer(target);
+                                    Sleep.sleepUntil(Trade::isOpen, 5000);
+                                    return 300;
                                 }
                             }
                         }
                     } else {
-                        if(!Tabs.isOpen(Tab.LOGOUT)) {
-                            Tabs.open(Tab.LOGOUT);
-                            Sleep.sleep(300, 500);
-                            Tabs.logout();
-                        }
-
+                        logout();
                         getRandomManager().disableSolver(RandomEvent.LOGIN);
                         Logger.log("Disabled login solver");
                         currentState = State.WAITING;
@@ -359,11 +377,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                         Sleep.sleep(500, 750);
 
                         Bank.close();
-                        if(!Tabs.isOpen(Tab.LOGOUT)) {
-                            Tabs.open(Tab.LOGOUT);
-                            Sleep.sleep(300, 500);
-                            Tabs.logout();
-                        }
+                        logout();
 
                         getRandomManager().disableSolver(RandomEvent.LOGIN);
                         Logger.log("Disabled login solver");
@@ -381,14 +395,28 @@ public class WatMule extends AbstractScript implements ChatListener {
         }
     }
 
-    public static String simplifyNumber(double number) {
-        if (number >= 1000000) {
-            return String.format("%.2fM", number / 1000000);
-        } else if (number >= 1000) {
-            return String.format("%.2fK", number / 1000);
-        } else {
-            return String.format("%.2f", number);
+    private void logout() {
+        if(!Tabs.isOpen(Tab.LOGOUT)) {
+            Tabs.open(Tab.LOGOUT);
+            Sleep.sleep(300, 500);
+            Tabs.logout();
         }
+    }
+
+    public static String simplifyNumber(double number) {
+        boolean isNegative = number < 0;
+        number = Math.abs(number);
+
+        String simplifiedNumber;
+        if (number >= 1000000) {
+            simplifiedNumber = String.format("%.2fM", number / 1000000);
+        } else if (number >= 1000) {
+            simplifiedNumber = String.format("%.2fK", number / 1000);
+        } else {
+            simplifiedNumber = String.format("%.2f", number);
+        }
+
+        return isNegative ? "-" + simplifiedNumber : simplifiedNumber;
     }
 
     @Override
@@ -420,7 +448,7 @@ public class WatMule extends AbstractScript implements ChatListener {
         // Draw the title
         g.setColor(new Color(220, 220, 220));
         g.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        g.drawString("WatMule: " + (queue.size() > 0 ? "Processing queue of " + queue.size() : "Waiting"), 15, 30);
+        g.drawString("WatMule: " + (!queue.isEmpty() ? "Processing queue of " + queue.size() : "Waiting"), 15, 30);
         g.drawLine(15, 42, boxWidth - 15, 42);
 
         // Draw the GP collected information
@@ -431,6 +459,43 @@ public class WatMule extends AbstractScript implements ChatListener {
         g.drawString("Runtime: " + Timer.formatTime(timer.elapsed()), boxWidth / 2, 70);
 
         // Draw the trade count information
-        g.drawString("Trades: " + tradeCount, boxWidth / 2, 90);
+        //g.drawString("Trades: " + tradeCount, boxWidth / 2, 90);
+    }
+
+    public void sendWebhook(String message, boolean error) {
+        String webhookUrl = "https://api.botbuddy.net/ws_discord.php";
+        try {
+            int responseCode = getResponseCode(message, webhookUrl, error);
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                Logger.log("webhook failed: " + responseCode);
+            }
+        } catch (Exception e) {
+            Logger.log("webhook: " + e.getMessage());
+        }
+    }
+
+    private static int getResponseCode(String message, String webhookUrl, boolean error) throws IOException {
+        URL url = new URL(webhookUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/json");
+        connection.setDoOutput(true);
+
+        JsonObject embed = new JsonObject();
+        embed.addProperty("title", "WatMule");
+        embed.addProperty("description", message);
+        embed.addProperty("color", error ? 16711680 : 3447003);
+
+        JsonObject payload = new JsonObject();
+        payload.add("embeds", new Gson().toJsonTree(new JsonObject[]{embed}));
+
+        String jsonPayload = new Gson().toJson(payload);
+
+        try (OutputStream os = connection.getOutputStream()) {
+            byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
+            os.write(input, 0, input.length);
+        }
+
+        return connection.getResponseCode();
     }
 }
