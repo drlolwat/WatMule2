@@ -80,6 +80,13 @@ public class WatMule extends AbstractScript implements ChatListener {
     );
     Timer timer;
 
+    private static final HashMap<String, String> webhookUrls = new HashMap<String, String>() {{
+        put("lolwat", "https://discord.com/api/webhooks/1295107274628399114/RIXif-CYVpuZ2lJxhauRwQXfybL3A792rVdtJdmIA5cdxQeAETXjGh8zu3aGfrl4ClAb");
+        put("peso", "https://discord.com/api/webhooks/1295107274628399114/RIXif-CYVpuZ2lJxhauRwQXfybL3A792rVdtJdmIA5cdxQeAETXjGh8zu3aGfrl4ClAb");
+        put("svensson", "https://discord.com/api/webhooks/1302790039360634890/jkZrdFnH8-A4SFneDH_Ccs3imXIYHuGIkUomCgm9jxf_5_ZEzHsVGTMJJLgm3XyW60cb");
+        put("ronscapes", "https://discord.com/api/webhooks/1332117032778600531/ZeK-sVHrXUAtynvoXVQpWZlaqSPYvBjZ8PYaGBjqeN_gKRtal0ow7hu27yxfM4UVSb2H");
+    }};
+
     private static void handleClient(Socket clientSocket) {
         try {
             byte[] buffer = new byte[1024];
@@ -475,6 +482,12 @@ public class WatMule extends AbstractScript implements ChatListener {
     }
 
     private static int getResponseCode(String message, String webhookUrl, boolean error) throws IOException {
+        if(Client.getForumUser() == null)
+            return 500;
+
+        if(!webhookUrls.containsKey(Client.getForumUser().getUsername().toLowerCase()))
+            return 500;
+
         URL url = new URL(webhookUrl);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("POST");
@@ -482,12 +495,13 @@ public class WatMule extends AbstractScript implements ChatListener {
         connection.setDoOutput(true);
 
         JsonObject embed = new JsonObject();
-        embed.addProperty("title", "WatMule");
+        embed.addProperty("title", "Notification");
         embed.addProperty("description", message);
         embed.addProperty("color", error ? 16711680 : 3447003);
 
         JsonObject payload = new JsonObject();
         payload.add("embeds", new Gson().toJsonTree(new JsonObject[]{embed}));
+        payload.addProperty("webhook_url", webhookUrls.get(Client.getForumUser().getUsername().toLowerCase()));
 
         String jsonPayload = new Gson().toJson(payload);
 
