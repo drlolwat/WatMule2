@@ -6,11 +6,11 @@
 
     <groupId>org.example</groupId>
     <artifactId>WatMule</artifactId>
-    <version>CUSTOM</version>
+    <version>1.1</version>
 
     <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <dreambot.path>${user.home}/DreamBot/</dreambot.path>
     </properties>
@@ -31,6 +31,12 @@
             <version>3.0.0</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.34</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -41,7 +47,7 @@
                 <version>3.2.1</version>
                 <configuration>
                     <shadedArtifactAttached>true</shadedArtifactAttached>
-                    <shadedClassifierName>dep-included</shadedClassifierName>
+                    <shadedClassifierName>unobbed</shadedClassifierName>
                     <outputDirectory>${dreambot.path}/Scripts</outputDirectory>
                 </configuration>
                 <executions>

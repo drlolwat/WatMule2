@@ -20,6 +20,7 @@ import org.dreambot.api.script.AbstractScript;
 import org.dreambot.api.script.Category;
 import org.dreambot.api.script.ScriptManifest;
 import org.dreambot.api.script.listener.ChatListener;
+import org.dreambot.api.utilities.AccountManager;
 import org.dreambot.api.utilities.Logger;
 import org.dreambot.api.utilities.Sleep;
 import org.dreambot.api.utilities.Timer;
@@ -44,7 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @ScriptManifest(name = "WatMule", description = "It is what it is", author = "lolwat",
-        version = 1.0, category = Category.MISC, image = "")
+        version = 1.1, category = Category.MISC,  image = "https://api.botbuddy.net/WatScripts.png")
 public class WatMule extends AbstractScript implements ChatListener {
     private enum State {
         WAITING,
@@ -82,7 +83,6 @@ public class WatMule extends AbstractScript implements ChatListener {
 
     private static final HashMap<String, String> webhookUrls = new HashMap<String, String>() {{
         put("lolwat", "https://discord.com/api/webhooks/1295107274628399114/RIXif-CYVpuZ2lJxhauRwQXfybL3A792rVdtJdmIA5cdxQeAETXjGh8zu3aGfrl4ClAb");
-        put("peso", "https://discord.com/api/webhooks/1295107274628399114/RIXif-CYVpuZ2lJxhauRwQXfybL3A792rVdtJdmIA5cdxQeAETXjGh8zu3aGfrl4ClAb");
         put("svensson", "https://discord.com/api/webhooks/1302790039360634890/jkZrdFnH8-A4SFneDH_Ccs3imXIYHuGIkUomCgm9jxf_5_ZEzHsVGTMJJLgm3XyW60cb");
         put("ronscapes", "https://discord.com/api/webhooks/1332117032778600531/ZeK-sVHrXUAtynvoXVQpWZlaqSPYvBjZ8PYaGBjqeN_gKRtal0ow7hu27yxfM4UVSb2H");
     }};
@@ -169,15 +169,17 @@ public class WatMule extends AbstractScript implements ChatListener {
         }
     }
 
-    @Override
-    public void onStart() {
+    public void doStart(String profile) {
+        ConfigManager.setInstance(new ConfigManager());
+        ConfigManager.getInstance().loadFromProfile(profile);
+
         Walking.setMinimapTargetSize(15);
         executorService = Executors.newFixedThreadPool(10);
 
         executorService.submit(() -> {
             try {
-                serverSocket = new ServerSocket(8081);
-                Logger.log("Mule server running");
+                serverSocket = new ServerSocket(ConfigManager.getInstance().getConfigInt("listen_port"));
+                Logger.log("Mule server running on port " + ConfigManager.getInstance().getConfigInt("listen_port"));
 
                 while (true) {
                     Socket clientSocket = serverSocket.accept();
@@ -195,6 +197,20 @@ public class WatMule extends AbstractScript implements ChatListener {
         if (!org.dreambot.api.wrappers.widgets.Menu.isMenuManipulationActive()) {
             Logger.log("Enabling menu manipulation");
             Menu.toggleMenuManipulation(true);
+        }
+    }
+
+    @Override
+    public void onStart() {
+        doStart("default");
+    }
+
+    @Override
+    public void onStart(String... params) {
+        if (params.length > 0) {
+            doStart(params[0]);
+        } else {
+            doStart("default");
         }
     }
 
@@ -342,7 +358,7 @@ public class WatMule extends AbstractScript implements ChatListener {
 
                                             Trade.acceptTrade();
                                             Sleep.sleepUntil(() -> !Trade.isOpen(), 2000);
-                                            sendWebhook("Trade completed with " + target + " for " + simplifyNumber(changeBy) + " coins", false);
+                                            sendMuleWebhook(target, changeBy);
                                             coinsToReverse.remove(target);
                                             queue.remove(target);
                                             target = "";
@@ -389,6 +405,7 @@ public class WatMule extends AbstractScript implements ChatListener {
                         getRandomManager().disableSolver(RandomEvent.LOGIN);
                         Logger.log("Disabled login solver");
                         currentState = State.WAITING;
+                        sendMuleWebhook("SCRIPT_SETUP", 0);
                     }
                 } else {
                     if(Walking.shouldWalk(6)) {
@@ -469,24 +486,26 @@ public class WatMule extends AbstractScript implements ChatListener {
         //g.drawString("Trades: " + tradeCount, boxWidth / 2, 90);
     }
 
+    public void sendMuleWebhook(String ptarget, int transacted) {
+        String formattedMessage = String.format("**Mule**: %s\n**Target**: %s\n**Gold transacted**: %s\n**Gold on mule**: %s", AccountManager.getAccountNickname(), ptarget, simplifyNumber(transacted), simplifyNumber(Inventory.count("Coins")));
+        sendWebhook(formattedMessage, false);
+    }
+
     public void sendWebhook(String message, boolean error) {
         String webhookUrl = "https://api.botbuddy.net/ws_discord.php";
         try {
-            int responseCode = getResponseCode(message, webhookUrl, error);
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                Logger.log("webhook failed: " + responseCode);
-            }
+            getResponseCode(message, webhookUrl, error);
         } catch (Exception e) {
             Logger.log("webhook: " + e.getMessage());
         }
     }
 
-    private static int getResponseCode(String message, String webhookUrl, boolean error) throws IOException {
+    private static void getResponseCode(String message, String webhookUrl, boolean error) throws IOException {
         if(Client.getForumUser() == null)
-            return 500;
+            return;
 
         if(!webhookUrls.containsKey(Client.getForumUser().getUsername().toLowerCase()))
-            return 500;
+            return;
 
         URL url = new URL(webhookUrl);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -495,7 +514,7 @@ public class WatMule extends AbstractScript implements ChatListener {
         connection.setDoOutput(true);
 
         JsonObject embed = new JsonObject();
-        embed.addProperty("title", "Notification");
+        embed.addProperty("title", "Mule");
         embed.addProperty("description", message);
         embed.addProperty("color", error ? 16711680 : 3447003);
 
@@ -510,6 +529,6 @@ public class WatMule extends AbstractScript implements ChatListener {
             os.write(input, 0, input.length);
         }
 
-        return connection.getResponseCode();
+        connection.getResponseCode();
     }
 }
